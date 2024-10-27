@@ -415,21 +415,21 @@ public class RadioAudioService extends Service {
         tempFrequency = tempFrequency.trim();
 
         // Pad any missing zeroes to match format expected by radio module.
-        if (tempFrequency.matches("14[4-8]\\.[0-9][0-9][0-9]")) {
+        if (tempFrequency.matches("14[4-5]\\.[0-9][0-9][0-9]")) {
             return tempFrequency;
-        } else if (tempFrequency.matches("14[4-8]\\.[0-9][0-9]")) {
+        } else if (tempFrequency.matches("14[4-5]\\.[0-9][0-9]")) {
             return tempFrequency + "0";
-        } else if (tempFrequency.matches("14[4-8]\\.[0-9]")) {
+        } else if (tempFrequency.matches("14[4-5]\\.[0-9]")) {
             return tempFrequency + "00";
-        } else if (tempFrequency.matches("14[4-8]\\.")) {
+        } else if (tempFrequency.matches("14[4-5]\\.")) {
             return tempFrequency + "000";
-        } else if (tempFrequency.matches("14[4-8]")) {
+        } else if (tempFrequency.matches("14[4-5]")) {
             return tempFrequency + ".000";
-        } else if (tempFrequency.matches("14[4-8][0-9][0-9][0-9]")) {
+        } else if (tempFrequency.matches("14[4-5][0-9][0-9][0-9]")) {
             return tempFrequency.substring(0, 3) + "." + tempFrequency.substring(3, 6);
-        } else if (tempFrequency.matches("14[4-8][0-9][0-9]")) {
+        } else if (tempFrequency.matches("14[4-5][0-9][0-9]")) {
             return tempFrequency.substring(0, 3) + "." + tempFrequency.substring(3, 5) + "0";
-        } else if (tempFrequency.matches("14[4-8][0-9]")) {
+        } else if (tempFrequency.matches("14[4-5][0-9]")) {
             return tempFrequency.substring(0, 3) + "." + tempFrequency.substring(3, 4) + "00";
         }
 
