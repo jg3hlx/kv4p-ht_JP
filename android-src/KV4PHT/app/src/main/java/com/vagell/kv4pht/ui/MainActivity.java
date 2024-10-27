@@ -414,8 +414,8 @@ public class MainActivity extends AppCompatActivity {
         if (infoField.getDataTypeIdentifier() == ':') { // APRS "message" type. What we expect for our text chat.
             MessagePacket messagePacket = new MessagePacket(infoField.getRawBytes(), aprsPacket.getDestinationCall());
             finalString = aprsPacket.getSourceCall() + " to " + messagePacket.getTargetCallsign() + ": " + messagePacket.getMessageBody();
-        } else { // Raw APRS packet. Useful for things like monitoring 144.39 for misc APRS traffic.
-            // TODO add better implementation of other message types (especially Location and Object, which are common on 144.390MHz).
+        } else { // Raw APRS packet. Useful for things like monitoring 144.66 for misc APRS traffic.
+            // TODO add better implementation of other message types (especially Location and Object, which are common on 144.660MHz).
             finalString = aprsPacket.toString();
         }
 
