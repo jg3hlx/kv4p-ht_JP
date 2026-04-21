@@ -1259,13 +1259,11 @@ public class RadioAudioService extends Service {
     private void handleRxAudio(final byte[] param, final Integer len) {
         int decoded = opusDecoder.decode(param, len, pcmFloat);
 
-        if (getMode() == RadioMode.RX || getMode() == RadioMode.SCAN) {
-            if (audioTrack != null) {
-                AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                audioTrack.write(pcmFloat, 0, decoded, AudioTrack.WRITE_NON_BLOCKING);
-                audioManager.requestAudioFocus(audioFocusRequest);
-                ensureAudioPlaying();
-            }
+        if ((getMode() == RadioMode.RX || getMode() == RadioMode.SCAN) && audioTrack != null) {
+            AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            audioTrack.write(pcmFloat, 0, decoded, AudioTrack.WRITE_NON_BLOCKING);
+            audioManager.requestAudioFocus(audioFocusRequest);
+            ensureAudioPlaying();
         }
         if (getMode() == RadioMode.SCAN) {
             for (int i = 0; i < decoded; i++) {
