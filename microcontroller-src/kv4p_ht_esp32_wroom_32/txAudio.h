@@ -35,10 +35,6 @@ EncodedAudioStream txOut(&out, &txDec);
 uint32_t txStartTime = -1;
 const uint16_t RUNAWAY_TX_SEC = 200;
 
-static constexpr size_t TX_AFSK_BLOCK_SAMPLES = 256;
-static constexpr float TX_AFSK_GAIN = 0.8f;
-static constexpr float TX_AFSK_LEAD_SILENCE_MS = 1100.0f;
-static constexpr float TX_AFSK_TAIL_SILENCE_MS = 700.0f;
 float txAfskBlock[TX_AFSK_BLOCK_SAMPLES];
 int16_t txAfskPcm[TX_AFSK_BLOCK_SAMPLES];
 
