@@ -78,13 +78,8 @@ import com.vagell.kv4pht.aprs.parser.Parser;
 import com.vagell.kv4pht.aprs.parser.Position;
 import com.vagell.kv4pht.aprs.parser.PositionField;
 import com.vagell.kv4pht.data.ChannelMemory;
-import com.vagell.kv4pht.javAX25.ax25.Afsk1200Modulator;
-import com.vagell.kv4pht.javAX25.ax25.Afsk1200MultiDemodulator;
 import com.vagell.kv4pht.javAX25.ax25.Arrays;
 import com.vagell.kv4pht.javAX25.ax25.Packet;
-import com.vagell.kv4pht.javAX25.ax25.PacketDemodulator;
-import com.vagell.kv4pht.javAX25.ax25.PacketHandler;
-import com.vagell.kv4pht.javAX25.ax25.PacketModulator;
 import com.vagell.kv4pht.radio.Protocol.Filters;
 import com.vagell.kv4pht.radio.Protocol.FrameParser;
 import com.vagell.kv4pht.radio.Protocol.Group;
@@ -105,7 +100,7 @@ import java.util.concurrent.*;
  * application to focus primarily on the setup flows and UI, and ensures that the radio audio
  * continues to play even if the phone's screen is off or the user starts another app.
  */
-public class RadioAudioService extends Service implements PacketHandler {
+public class RadioAudioService extends Service {
 
     // === Constants ===
     private static final String TAG = RadioAudioService.class.getSimpleName();
@@ -138,8 +133,6 @@ public class RadioAudioService extends Service implements PacketHandler {
     public static final int APRS_POSITION_APPROX = 1;
     public static final int APRS_BEACON_MINS = 5;
     private static final int APRS_MAX_MESSAGE_NUM = 99999;
-    private static final int MS_SILENCE_BEFORE_DATA_MS = 1100;
-    private static final int MS_SILENCE_AFTER_DATA_MS = 700;
     private static final String MESSAGE_NOTIFICATION_CHANNEL_ID = "aprs_message_notifications";
     private static final int MESSAGE_NOTIFICATION_TO_YOU_ID = 0;
     public static final List<Digipeater> DEFAULT_DIGIPEATERS = List.of(new Digipeater("WIDE1*"), new Digipeater("WIDE2-1"));
@@ -196,10 +189,6 @@ public class RadioAudioService extends Service implements PacketHandler {
     private final FrameParser esp32DataStreamParser = new FrameParser(this::handleParsedCommand);
     private int usbConnectAttemptSeq = 0;
     private int activeUsbConnectAttemptId = 0;
-
-    // === AFSK Modem ===
-    private final PacketModulator afskModulator = new Afsk1200Modulator(AUDIO_SAMPLE_RATE);
-    private final PacketDemodulator afskDemodulator = new Afsk1200MultiDemodulator(AUDIO_SAMPLE_RATE, this);
 
     // === APRS State ===
     private boolean aprsBeaconPosition = false;
@@ -1229,10 +1218,20 @@ public class RadioAudioService extends Service implements PacketHandler {
                 WindowUpdate.from(param, len).ifPresent(windowAck ->
                     hostToEsp32.enlargeFlowControlWindow(windowAck.getSize()));
                 break;
+            case COMMAND_RX_AX25_PACKET:
+                handleEsp32Ax25Packet(param, len);
+                break;
 
             default:
                 break;
         }
+    }
+
+    private void handleEsp32Ax25Packet(final byte[] param, final Integer len) {
+        if (param == null || len == null || len < 2) {
+            return;
+        }
+        handleAx25Packet(java.util.Arrays.copyOfRange(param, 1, len));
     }
 
     private void handlePhysicalPttUp() {
@@ -1260,14 +1259,11 @@ public class RadioAudioService extends Service implements PacketHandler {
     private void handleRxAudio(final byte[] param, final Integer len) {
         int decoded = opusDecoder.decode(param, len, pcmFloat);
 
-        if (getMode() == RadioMode.RX || getMode() == RadioMode.SCAN) {
-            afskDemodulator.addSamples(pcmFloat, decoded);
-            if (audioTrack != null) {
-                AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                audioTrack.write(pcmFloat, 0, decoded, AudioTrack.WRITE_NON_BLOCKING);
-                audioManager.requestAudioFocus(audioFocusRequest);
-                ensureAudioPlaying();
-            }
+        if ((getMode() == RadioMode.RX || getMode() == RadioMode.SCAN) && audioTrack != null) {
+            AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            audioTrack.write(pcmFloat, 0, decoded, AudioTrack.WRITE_NON_BLOCKING);
+            audioManager.requestAudioFocus(audioFocusRequest);
+            ensureAudioPlaying();
         }
         if (getMode() == RadioMode.SCAN) {
             for (int i = 0; i < decoded; i++) {
@@ -1311,8 +1307,7 @@ public class RadioAudioService extends Service implements PacketHandler {
         }
     }
 
-    @Override
-    public void handlePacket(byte[] packet) {
+    private void handleAx25Packet(byte[] packet) {
         try {
             APRSPacket aprsPacket = Parser.parseAX25(packet);
             InformationField info = aprsPacket.getPayload();
@@ -1441,22 +1436,8 @@ public class RadioAudioService extends Service implements PacketHandler {
     }
 
     /**
-     * Sends silent frames to the ESP32 for a specified duration.
-     * This is used to ensure that there is silence before and after sending data.
-     *
-     * @param durationMs The duration in milliseconds for which to send silence.
-     */
-    private void sendSilentFrames(int durationMs) {
-        float[] opusFrame = new float[OPUS_FRAME_SIZE];
-        java.util.Arrays.fill(opusFrame, 0.0f);
-        for (int i = 0; i < (durationMs / 40); i++) {
-            sendAudioToESP32(opusFrame, true);
-        }
-    }
-
-    /**
      * Sends an AX.25 packet to the ESP32 for transmission.
-     * This method handles the modulation and transmission of the packet.
+     * Firmware handles AFSK modulation so the Android app does not need to stream packet audio.
      *
      * @param ax25Packet The AX.25 packet to send.
      */
@@ -1465,33 +1446,16 @@ public class RadioAudioService extends Service implements PacketHandler {
             Log.e(TAG, "Tried to send an AX.25 packet when tx is not allowed, did not send.");
             return;
         }
-        Log.d(TAG, "Sending AX25 packet: " + ax25Packet);
-        startPtt();
-        float[] opusFrame = new float[OPUS_FRAME_SIZE];
-        // Send lead-in silence
-        sendSilentFrames(MS_SILENCE_BEFORE_DATA_MS);
-        // Prepare AFSK modulator
-        int opusFrameIndex = 0;
-        java.util.Arrays.fill(opusFrame, 0.0f);
-        afskModulator.prepareToTransmit(ax25Packet);
-        float[] buffer = afskModulator.getTxSamplesBuffer();
-        // Modulate and send samples
-        int n;
-        while ((n = afskModulator.getSamples()) > 0) {
-            for (int i = 0; i < n; i++) {
-                opusFrame[opusFrameIndex++] = buffer[i];
-                if (opusFrameIndex == OPUS_FRAME_SIZE) {
-                    sendAudioToESP32(opusFrame, true);
-                    java.util.Arrays.fill(opusFrame, 0.0f);
-                    opusFrameIndex = 0;
-                }
-            }
+        if (getMode() != RadioMode.RX) {
+            Log.e(TAG, "Tried to send an AX.25 packet when radio was not in RX mode, did not send.");
+            return;
         }
-        // Send remaining audio if needed
-        sendAudioToESP32(opusFrame, true);
-        // Send tail silence
-        sendSilentFrames(MS_SILENCE_AFTER_DATA_MS);
-        endPtt();
+        if (hostToEsp32 == null) {
+            Log.e(TAG, "Tried to send AX.25 packet with no ESP32 connection.");
+            return;
+        }
+        Log.d(TAG, "Sending AX25 packet: " + ax25Packet);
+        hostToEsp32.txAx25(ax25Packet.bytesWithoutCRC());
         Log.i(TAG, "Send AX25 packet: " + ax25Packet);
     }
 

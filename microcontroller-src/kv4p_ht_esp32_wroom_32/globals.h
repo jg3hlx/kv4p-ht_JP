@@ -29,6 +29,12 @@ enum RfModuleType {
 // Audio sampling rate, must match what Android app expects (and sends).
 #define AUDIO_SAMPLE_RATE 48000
 
+// Firmware AX.25 TX tuning. Lead/tail silence matches the previous Android-side AFSK encoder timing.
+static constexpr size_t TX_AFSK_BLOCK_SAMPLES = 256;
+static constexpr float TX_AFSK_GAIN = 0.8f;
+static constexpr float TX_AFSK_LEAD_SILENCE_MS = 1100.0f;
+static constexpr float TX_AFSK_TAIL_SILENCE_MS = 700.0f;
+
 // Maximum length of the frame
 #define PROTO_MTU 2048
 

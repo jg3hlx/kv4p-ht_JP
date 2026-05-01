@@ -1819,7 +1819,9 @@ public class MainActivity extends AppCompatActivity {
                                 viewModel.highlightMemory(channelMemories.get(i));
 
                                 if (radioAudioService != null) {
-                                    radioAudioService.tuneToMemory(channelMemories.get(i), squelch, false);
+                                    // Force retune so changed memory fields (e.g. offset/tones) are applied
+                                    // even when memoryId and squelch did not change.
+                                    radioAudioService.tuneToMemory(channelMemories.get(i), squelch, true);
                                 }
 
                                 tuneToMemoryUi(channelMemories.get(i).memoryId);
